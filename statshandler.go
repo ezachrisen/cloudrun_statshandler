@@ -3,8 +3,6 @@ package cloudrun_statshandler
 import (
 	"context"
 
-	log "github.com/sirupsen/logrus"
-
 	"net/http"
 
 	httpprop "contrib.go.opencensus.io/exporter/stackdriver/propagation"
@@ -14,7 +12,7 @@ import (
 )
 
 // NewTracer returns a gRPC stats handler that checks
-// for httpHeader in the metadata of the grpc call,
+// for cloudTraceHeader in the metadata of the grpc call,
 // parses it, and passes it as binary trace to grpc.
 // This is a workaround until https://github.com/cloudendpoints/esp/issues/416 is resolved.
 func NewTracer(h stats.Handler) stats.Handler {
@@ -22,8 +20,8 @@ func NewTracer(h stats.Handler) stats.Handler {
 }
 
 const (
-	httpHeader = "X-Cloud-Trace-Context"
-	binHeader  = "grpc-trace-bin"
+	cloudTraceHeader = "X-Cloud-Trace-Context"
+	binHeader        = "grpc-trace-bin"
 )
 
 // traceHandler wrapper for ESP
@@ -33,25 +31,18 @@ type traceHandler struct {
 
 func (th *traceHandler) TagRPC(ctx context.Context, ti *stats.RPCTagInfo) context.Context {
 	md, ok := metadata.FromIncomingContext(ctx)
-
-	cloudTrace := md.Get(httpHeader)
-	log.WithContext(ctx).Println("Clod=ud trace", cloudTrace)
-
-	if !ok || len(md.Get(httpHeader)) == 0 || len(md.Get(binHeader)) > 0 {
+	if !ok || len(md.Get(cloudTraceHeader)) == 0 || len(md.Get(binHeader)) > 0 {
 		return th.h.TagRPC(ctx, ti)
 	}
 	frmt := &httpprop.HTTPFormat{}
 	httpReq, _ := http.NewRequest("GET", "/", nil)
-	httpReq.Header.Add(httpHeader, md.Get(httpHeader)[0])
+	httpReq.Header.Add(cloudTraceHeader, md.Get(cloudTraceHeader)[0])
 	sp, ok := frmt.SpanContextFromRequest(httpReq)
 	if !ok {
-		log.WithContext(ctx).Println("Returning2")
-
 		return th.h.TagRPC(ctx, ti)
 	}
 	bin := propagation.Binary(sp)
 	md = md.Copy()
-	log.WithContext(ctx).Println("Setting binheader")
 	md.Set(binHeader, string(bin))
 	ctx = metadata.NewIncomingContext(ctx, md)
 
