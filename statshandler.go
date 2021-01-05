@@ -14,7 +14,7 @@ import (
 // NewTracer returns a gRPC stats handler that checks
 // for cloudTraceHeader in the metadata of the grpc call,
 // parses it, and passes it as binary trace to grpc.
-// This is a workaround until https://github.com/cloudendpoints/esp/issues/416 is resolved.
+// This is a workaround until OpenCensus "understands" GCP trace headers.
 func NewTracer(h stats.Handler) stats.Handler {
 	return &traceHandler{h}
 }
@@ -24,7 +24,7 @@ const (
 	binHeader        = "grpc-trace-bin"
 )
 
-// traceHandler wrapper for ESP
+// traceHandler wrapper
 type traceHandler struct {
 	h stats.Handler
 }
