@@ -20,10 +20,26 @@ import (
 	"google.golang.org/grpc/stats"
 )
 
-// NewTracer returns a gRPC stats handler that checks
-// for cloudTraceHeader in the metadata of the grpc call,
-// parses it, and passes it as binary trace to grpc.
-// This is a workaround until OpenCensus "understands" GCP trace headers.
+const (
+	// cloudTraceHeader is the gRPC metadata key where we'll receive the
+	// Google Cloud Platform added trace context ID
+	cloudTraceHeader = "X-Cloud-Trace-Context"
+
+	// binHeader is the metadata header key where gRPC expects the
+	// trace context ID to be.
+	// We'll put the value from cloudTraceHeader here.
+	binHeader = "grpc-trace-bin"
+)
+
+var (
+	// Key for the opencensus metric tag
+	KeyRevisionName = tag.MustNewKey("cloud_run_revision_name")
+	// Key for the opencensus metric tag
+	KeyLocationName = tag.MustNewKey("cloud_run_location_name")
+)
+
+// NewHandler returns a wrapper around a gRPC stats handler
+// Provide the Cloud Run revision and location names
 func NewHandler(h stats.Handler, revisionName, locationName string) stats.Handler {
 	return &statsHandler{
 		h:            h,
@@ -32,16 +48,6 @@ func NewHandler(h stats.Handler, revisionName, locationName string) stats.Handle
 	}
 }
 
-const (
-	cloudTraceHeader = "X-Cloud-Trace-Context"
-	binHeader        = "grpc-trace-bin"
-)
-
-var (
-	KeyRevisionName = tag.MustNewKey("cloud_run_revision_name")
-	KeyLocationName = tag.MustNewKey("cloud_run_location_name")
-)
-
 // statsHandler wrapper
 type statsHandler struct {
 	h            stats.Handler
@@ -49,12 +55,15 @@ type statsHandler struct {
 	locationName string
 }
 
+// AddTagKeysToViews adds the revision name and location name tags to the the
+// list of go.opencensus.io/stats/view passed in.
 func AddTagKeysToViews(views []*view.View) {
 	for i := range views {
 		views[i].TagKeys = append(views[i].TagKeys, KeyRevisionName, KeyLocationName)
 	}
 }
 
+// stats.Handler method
 func (th *statsHandler) TagRPC(ctx context.Context, ti *stats.RPCTagInfo) context.Context {
 
 	ctx = th.addCloudTraceHeader(ctx)
@@ -63,14 +72,17 @@ func (th *statsHandler) TagRPC(ctx context.Context, ti *stats.RPCTagInfo) contex
 	return th.h.TagRPC(ctx, ti)
 }
 
+// stats.Handler method
 func (th *statsHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
 	th.h.HandleRPC(ctx, s)
 }
 
+// stats.Handler method
 func (th *statsHandler) TagConn(ctx context.Context, cti *stats.ConnTagInfo) context.Context {
 	return th.h.TagConn(ctx, cti)
 }
 
+// stats.Handler method
 func (th *statsHandler) HandleConn(ctx context.Context, cs stats.ConnStats) {
 	th.h.HandleConn(ctx, cs)
 }
