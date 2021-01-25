@@ -41,7 +41,7 @@ type traceHandler struct {
 
 func (th *traceHandler) TagRPC(ctx context.Context, ti *stats.RPCTagInfo) context.Context {
 	log.WithContext(ctx).Info("IN TAGRPC")
-	ctx, _ = tag.New(ctx, tag.Upsert(KeyRevisionName, "FROM_THE_STATS_HANDLER"))
+	ctx, _ = tag.New(ctx, tag.Upsert(KeyRevisionName, "FROM_THE_STATS_HANDLER1"))
 	fmt.Printf("TAGS %v\n", *tag.FromContext(ctx))
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok || len(md.Get(cloudTraceHeader)) == 0 || len(md.Get(binHeader)) > 0 {
