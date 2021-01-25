@@ -2,12 +2,12 @@ package cloudrun_statshandler
 
 import (
 	"context"
-	"fmt"
 
 	"net/http"
 
-	httpprop "contrib.go.opencensus.io/exporter/stackdriver/propagation"
 	log "github.com/sirupsen/logrus"
+
+	httpprop "contrib.go.opencensus.io/exporter/stackdriver/propagation"
 	"go.opencensus.io/tag"
 	"go.opencensus.io/trace/propagation"
 	"google.golang.org/grpc/metadata"
@@ -18,8 +18,12 @@ import (
 // for cloudTraceHeader in the metadata of the grpc call,
 // parses it, and passes it as binary trace to grpc.
 // This is a workaround until OpenCensus "understands" GCP trace headers.
-func NewTracer(h stats.Handler) stats.Handler {
-	return &traceHandler{h}
+func NewTracer(h stats.Handler, revisionName, locationName string) stats.Handler {
+	return &traceHandler{
+		h:            h,
+		revisionName: revisionName,
+		locationName: locationName,
+	}
 }
 
 const (
@@ -34,35 +38,57 @@ var (
 
 // traceHandler wrapper
 type traceHandler struct {
-	h stats.Handler
-	// revisionName string
-	// locationName string
+	h            stats.Handler
+	revisionName string
+	locationName string
 }
 
 func (th *traceHandler) TagRPC(ctx context.Context, ti *stats.RPCTagInfo) context.Context {
 
+	ctx = th.addCloudTraceHeader(ctx)
+	ctx = th.addMetricTags(ctx)
+
+	return th.h.TagRPC(ctx, ti)
+}
+
+func (th *traceHandler) addMetricTags(ctx context.Context) context.Context {
+
+	log.WithContext(ctx).Infof("IN TAGRPC %v", *tag.FromContext(ctx))
+
+	ctx, err := tag.New(ctx, tag.Upsert(KeyRevisionName, th.revisionName))
+	if err != nil {
+		log.WithContext(ctx).Warnf("addMetricTags: Error adding tags: %v", err)
+	}
+
+	ctx, err = tag.New(ctx, tag.Upsert(KeyLocationName, th.locationName))
+	if err != nil {
+		log.WithContext(ctx).Warnf("addMetricTags: Error adding tags: %v", err)
+	}
+
+	log.WithContext(ctx).Infof("after setting TAGS %v\n", *tag.FromContext(ctx))
+	return ctx
+
+}
+
+func (th *traceHandler) addCloudTraceHeader(ctx context.Context) context.Context {
+
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok || len(md.Get(cloudTraceHeader)) == 0 || len(md.Get(binHeader)) > 0 {
-		return th.h.TagRPC(ctx, ti)
+		return ctx
 	}
+
 	frmt := &httpprop.HTTPFormat{}
 	httpReq, _ := http.NewRequest("GET", "/", nil)
 	httpReq.Header.Add(cloudTraceHeader, md.Get(cloudTraceHeader)[0])
 	sp, ok := frmt.SpanContextFromRequest(httpReq)
 	if !ok {
-		return th.h.TagRPC(ctx, ti)
+		return ctx
 	}
+
 	bin := propagation.Binary(sp)
 	md = md.Copy()
 	md.Set(binHeader, string(bin))
 	ctx = metadata.NewIncomingContext(ctx, md)
-
-	ctx = th.h.TagRPC(ctx, ti)
-
-	log.WithContext(ctx).Infof("IN TAGRPC %v", *tag.FromContext(ctx))
-	ctx, _ = tag.New(ctx, tag.Upsert(KeyRevisionName, "FROM_THE_STATS_HANDLER1"))
-	fmt.Printf("TAGS %v\n", *tag.FromContext(ctx))
-
 	return ctx
 }
 
@@ -71,8 +97,6 @@ func (th *traceHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
 }
 
 func (th *traceHandler) TagConn(ctx context.Context, cti *stats.ConnTagInfo) context.Context {
-	log.WithContext(ctx).Info("IN TAGCONN")
-	ctx, _ = tag.New(ctx, tag.Upsert(KeyRevisionName, "FROM_THE_STATS_HANDLER2"))
 	return th.h.TagConn(ctx, cti)
 }
 
