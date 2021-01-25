@@ -8,6 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	httpprop "contrib.go.opencensus.io/exporter/stackdriver/propagation"
+	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
 	"go.opencensus.io/trace/propagation"
 	"google.golang.org/grpc/metadata"
@@ -41,6 +42,13 @@ type traceHandler struct {
 	h            stats.Handler
 	revisionName string
 	locationName string
+}
+
+func AddTagKeysToViews(views []*view.View) {
+
+	for i := range views {
+		views[i].TagKeys = append(views[i].TagKeys, KeyRevisionName, KeyLocationName)
+	}
 }
 
 func (th *traceHandler) TagRPC(ctx context.Context, ti *stats.RPCTagInfo) context.Context {
