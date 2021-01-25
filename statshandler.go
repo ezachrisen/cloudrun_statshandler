@@ -67,9 +67,12 @@ func AddTagKeysToViews(views []*view.View) {
 func (th *statsHandler) TagRPC(ctx context.Context, ti *stats.RPCTagInfo) context.Context {
 
 	ctx = th.addCloudTraceHeader(ctx)
+	//! Important: the order matters.
+	// If you call addMetricTags before TagRPC, the tags you added are overwritten
+	ctx = th.h.TagRPC(ctx, ti)
 	ctx = th.addMetricTags(ctx)
 
-	return th.h.TagRPC(ctx, ti)
+	return ctx
 }
 
 // stats.Handler method
