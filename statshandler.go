@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	httpprop "contrib.go.opencensus.io/exporter/stackdriver/propagation"
+	"go.opencensus.io/tag"
 	"go.opencensus.io/trace/propagation"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
@@ -24,9 +25,16 @@ const (
 	binHeader        = "grpc-trace-bin"
 )
 
+var (
+	KeyRevisionName = tag.MustNewKey("cloud_run_revision_name")
+	KeyLocationName = tag.MustNewKey("cloud_run_location_name")
+)
+
 // traceHandler wrapper
 type traceHandler struct {
 	h stats.Handler
+	// revisionName string
+	// locationName string
 }
 
 func (th *traceHandler) TagRPC(ctx context.Context, ti *stats.RPCTagInfo) context.Context {
@@ -45,6 +53,8 @@ func (th *traceHandler) TagRPC(ctx context.Context, ti *stats.RPCTagInfo) contex
 	md = md.Copy()
 	md.Set(binHeader, string(bin))
 	ctx = metadata.NewIncomingContext(ctx, md)
+
+	ctx, _ = tag.New(ctx, tag.Insert(KeyRevisionName, "FROM_THE_STATS_HANDLER"))
 
 	return th.h.TagRPC(ctx, ti)
 }
