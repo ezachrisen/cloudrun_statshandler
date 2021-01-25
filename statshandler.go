@@ -40,9 +40,7 @@ type traceHandler struct {
 }
 
 func (th *traceHandler) TagRPC(ctx context.Context, ti *stats.RPCTagInfo) context.Context {
-	log.WithContext(ctx).Info("IN TAGRPC")
-	ctx, _ = tag.New(ctx, tag.Upsert(KeyRevisionName, "FROM_THE_STATS_HANDLER1"))
-	fmt.Printf("TAGS %v\n", *tag.FromContext(ctx))
+
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok || len(md.Get(cloudTraceHeader)) == 0 || len(md.Get(binHeader)) > 0 {
 		return th.h.TagRPC(ctx, ti)
@@ -59,7 +57,13 @@ func (th *traceHandler) TagRPC(ctx context.Context, ti *stats.RPCTagInfo) contex
 	md.Set(binHeader, string(bin))
 	ctx = metadata.NewIncomingContext(ctx, md)
 
-	return th.h.TagRPC(ctx, ti)
+	ctx = th.h.TagRPC(ctx, ti)
+
+	log.WithContext(ctx).Infof("IN TAGRPC %v", *tag.FromContext(ctx))
+	ctx, _ = tag.New(ctx, tag.Upsert(KeyRevisionName, "FROM_THE_STATS_HANDLER1"))
+	fmt.Printf("TAGS %v\n", *tag.FromContext(ctx))
+
+	return ctx
 }
 
 func (th *traceHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
