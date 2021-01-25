@@ -67,6 +67,8 @@ func (th *traceHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
 }
 
 func (th *traceHandler) TagConn(ctx context.Context, cti *stats.ConnTagInfo) context.Context {
+	log.WithContext(ctx).Info("IN TAGCONN")
+	ctx, _ = tag.New(ctx, tag.Upsert(KeyRevisionName, "FROM_THE_STATS_HANDLER2"))
 	return th.h.TagConn(ctx, cti)
 }
 
