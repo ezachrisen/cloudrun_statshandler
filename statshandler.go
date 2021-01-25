@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	httpprop "contrib.go.opencensus.io/exporter/stackdriver/propagation"
+	log "github.com/sirupsen/logrus"
 	"go.opencensus.io/tag"
 	"go.opencensus.io/trace/propagation"
 	"google.golang.org/grpc/metadata"
@@ -38,6 +39,10 @@ type traceHandler struct {
 }
 
 func (th *traceHandler) TagRPC(ctx context.Context, ti *stats.RPCTagInfo) context.Context {
+
+	log.WithContext(ctx).Info("IN TAGRPC")
+	ctx, _ = tag.New(ctx, tag.Insert(KeyRevisionName, "FROM_THE_STATS_HANDLER"))
+
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok || len(md.Get(cloudTraceHeader)) == 0 || len(md.Get(binHeader)) > 0 {
 		return th.h.TagRPC(ctx, ti)
@@ -53,8 +58,6 @@ func (th *traceHandler) TagRPC(ctx context.Context, ti *stats.RPCTagInfo) contex
 	md = md.Copy()
 	md.Set(binHeader, string(bin))
 	ctx = metadata.NewIncomingContext(ctx, md)
-
-	ctx, _ = tag.New(ctx, tag.Insert(KeyRevisionName, "FROM_THE_STATS_HANDLER"))
 
 	return th.h.TagRPC(ctx, ti)
 }
