@@ -1,10 +1,10 @@
 // cloudrun_statshandler adds functionality to the OpenCensus gRPC plugin (go.opencensus.io/plugin/ocgrpc) for Google Cloud, specifically Cloud Run. It may work with other Google Cloud platforms as well.
-// 
+//
 // We provide a wrapper around stats.Handler (google.golang.org/grpc/stats), which does two things:
 // 1. Translates from the Google Cloud Platform trace ID header to the gRPC trace header
 // 2. Adds the Cloud Run revision name to the go.opencensus.io/tag map, so that metrics
-// reported by the OpenCensus gRPC plugin are tagged with it. That enables us to monitor A/B 
-// deployments. 
+// reported by the OpenCensus gRPC plugin are tagged with it. That enables us to monitor A/B
+// deployments.
 package cloudrun_statshandler
 
 import (
@@ -34,19 +34,18 @@ const (
 )
 
 var (
-	// Key for the opencensus metric tag. OpenCensus stores the tags in a tag map in the 
-	// context. The key name must be unique within the tag map. 
+	// Key for the opencensus metric tag. OpenCensus stores the tags in a tag map in the
+	// context. The key name must be unique within the tag map.
 	KeyRevisionName = tag.MustNewKey("cloud_run_revision_name")
-\
 )
 
 // NewHandler returns a wrapper around a gRPC stats handler
 // Provide the Cloud Run revision and location names
-func NewHandler(h stats.Handler, revisionName, locationName string) stats.Handler {
+func NewHandler(h stats.Handler, revisionName string) stats.Handler {
 	return &statsHandler{
 		h:            h,
 		revisionName: revisionName,
-\	}
+	}
 }
 
 // statsHandler wrapper
@@ -59,12 +58,12 @@ type statsHandler struct {
 // list of go.opencensus.io/stats/view passed in.
 func AddTagKeysToViews(views []*view.View) {
 	for i := range views {
-		views[i].TagKeys = append(views[i].TagKeys, KeyRevisionName, KeyLocationName)
+		views[i].TagKeys = append(views[i].TagKeys, KeyRevisionName)
 	}
 }
 
 // TagRPC is called by Opencensus to apply metadata to the context. It is called for every
-// request. 
+// request.
 func (th *statsHandler) TagRPC(ctx context.Context, ti *stats.RPCTagInfo) context.Context {
 
 	ctx = th.addCloudTraceHeader(ctx)
@@ -91,29 +90,30 @@ func (th *statsHandler) HandleConn(ctx context.Context, cs stats.ConnStats) {
 	th.h.HandleConn(ctx, cs)
 }
 
-// addMetricTags applies the tags to the OpenCensus tag map in the request context. 
+// addMetricTags applies the tags to the OpenCensus tag map in the request context.
 func (th *statsHandler) addMetricTags(ctx context.Context) context.Context {
 
-	// m := tag.FromContext(ctx)
-	// if m != nil {
-	// 	log.WithContext(ctx).Infof("IN TAGRPC %v", *m)
-	// }
+	//logTags(ctx)
 
 	ctx, err := tag.New(ctx, tag.Upsert(KeyRevisionName, th.revisionName))
 	if err != nil {
 		log.WithContext(ctx).Warnf("addMetricTags: Error adding tags: %v", err)
 	}
 
-	// m = tag.FromContext(ctx)
-	// if m != nil {
-	// 	log.WithContext(ctx).Infof("AFTER setting tagrpcs %v", *m)
-	// }
-	// return ctx
-
+	//logTags(ctx)
+	return ctx
 }
 
-// addCloudTraceHeader takes the incoming GCP trace header and puts it into the 
-// gRPC metadata field. 
+// For debugging
+func logTags(ctx context.Context) {
+	m := tag.FromContext(ctx)
+	if m != nil {
+		log.WithContext(ctx).Infof("TAGS: %v", *m)
+	}
+}
+
+// addCloudTraceHeader takes the incoming GCP trace header and puts it into the
+// gRPC metadata field.
 func (th *statsHandler) addCloudTraceHeader(ctx context.Context) context.Context {
 
 	md, ok := metadata.FromIncomingContext(ctx)
