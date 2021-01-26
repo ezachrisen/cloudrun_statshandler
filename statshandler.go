@@ -1,8 +1,10 @@
-// cloudrun_statshandler adds functionality to the OpenCensus gRPC plugin (go.opencensus.io/plugin/ocgrpc).
+// cloudrun_statshandler adds functionality to the OpenCensus gRPC plugin (go.opencensus.io/plugin/ocgrpc) for Google Cloud, specifically Cloud Run. It may work with other Google Cloud platforms as well.
+// 
 // We provide a wrapper around stats.Handler (google.golang.org/grpc/stats), which does two things:
 // 1. Translates from the Google Cloud Platform trace ID header to the gRPC trace header
-// 2. Adds the Cloud Run revision and location names to the go.opencensus.io/tag map, so that metrics
-//    reported by the OpenCensus gRPC plugin are tagged with those values.
+// 2. Adds the Cloud Run revision name to the go.opencensus.io/tag map, so that metrics
+// reported by the OpenCensus gRPC plugin are tagged with it. That enables us to monitor A/B 
+// deployments. 
 package cloudrun_statshandler
 
 import (
@@ -32,10 +34,10 @@ const (
 )
 
 var (
-	// Key for the opencensus metric tag
+	// Key for the opencensus metric tag. OpenCensus stores the tags in a tag map in the 
+	// context. The key name must be unique within the tag map. 
 	KeyRevisionName = tag.MustNewKey("cloud_run_revision_name")
-	// Key for the opencensus metric tag
-	KeyLocationName = tag.MustNewKey("cloud_run_location_name")
+\
 )
 
 // NewHandler returns a wrapper around a gRPC stats handler
@@ -44,15 +46,13 @@ func NewHandler(h stats.Handler, revisionName, locationName string) stats.Handle
 	return &statsHandler{
 		h:            h,
 		revisionName: revisionName,
-		locationName: locationName,
-	}
+\	}
 }
 
 // statsHandler wrapper
 type statsHandler struct {
 	h            stats.Handler
 	revisionName string
-	locationName string
 }
 
 // AddTagKeysToViews adds the revision name and location name tags to the the
@@ -63,7 +63,8 @@ func AddTagKeysToViews(views []*view.View) {
 	}
 }
 
-// stats.Handler method
+// TagRPC is called by Opencensus to apply metadata to the context. It is called for every
+// request. 
 func (th *statsHandler) TagRPC(ctx context.Context, ti *stats.RPCTagInfo) context.Context {
 
 	ctx = th.addCloudTraceHeader(ctx)
@@ -75,46 +76,44 @@ func (th *statsHandler) TagRPC(ctx context.Context, ti *stats.RPCTagInfo) contex
 	return ctx
 }
 
-// stats.Handler method
+// HandleRPC satisfies the stats.Handler interface
 func (th *statsHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
 	th.h.HandleRPC(ctx, s)
 }
 
-// stats.Handler method
+// TagConn satisfies the stats.Handler interface
 func (th *statsHandler) TagConn(ctx context.Context, cti *stats.ConnTagInfo) context.Context {
 	return th.h.TagConn(ctx, cti)
 }
 
-// stats.Handler method
+// HandleConn satisfies the stats.Handler interface
 func (th *statsHandler) HandleConn(ctx context.Context, cs stats.ConnStats) {
 	th.h.HandleConn(ctx, cs)
 }
 
+// addMetricTags applies the tags to the OpenCensus tag map in the request context. 
 func (th *statsHandler) addMetricTags(ctx context.Context) context.Context {
 
-	m := tag.FromContext(ctx)
-	if m != nil {
-		log.WithContext(ctx).Infof("IN TAGRPC %v", *m)
-	}
+	// m := tag.FromContext(ctx)
+	// if m != nil {
+	// 	log.WithContext(ctx).Infof("IN TAGRPC %v", *m)
+	// }
 
 	ctx, err := tag.New(ctx, tag.Upsert(KeyRevisionName, th.revisionName))
 	if err != nil {
 		log.WithContext(ctx).Warnf("addMetricTags: Error adding tags: %v", err)
 	}
 
-	ctx, err = tag.New(ctx, tag.Upsert(KeyLocationName, th.locationName))
-	if err != nil {
-		log.WithContext(ctx).Warnf("addMetricTags: Error adding tags: %v", err)
-	}
-
-	m = tag.FromContext(ctx)
-	if m != nil {
-		log.WithContext(ctx).Infof("AFTER setting tagrpcs %v", *m)
-	}
-	return ctx
+	// m = tag.FromContext(ctx)
+	// if m != nil {
+	// 	log.WithContext(ctx).Infof("AFTER setting tagrpcs %v", *m)
+	// }
+	// return ctx
 
 }
 
+// addCloudTraceHeader takes the incoming GCP trace header and puts it into the 
+// gRPC metadata field. 
 func (th *statsHandler) addCloudTraceHeader(ctx context.Context) context.Context {
 
 	md, ok := metadata.FromIncomingContext(ctx)
